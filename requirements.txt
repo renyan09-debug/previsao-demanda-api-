@@ -1,1 +1,6 @@
-requirements.txt
+fastapi
+uvicorn
+scikit-learn
+pandas
+numpy
+joblib
