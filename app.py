@@ -1,20 +1,17 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+import pandas as pd
 import joblib
 import os
-import pandas as pd
 
 app = FastAPI(title="Previsão de Demanda API")
 
-# ==========================
-# Carregar modelo
-# ==========================
-MODEL_PATH = os.path.join("model", "modelo.pkl")
-model = joblib.load(MODEL_PATH)
+# carregar modelo e features
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ==========================
-# Schema de entrada
-# ==========================
+model = joblib.load(os.path.join(BASE_DIR, "model/modelo_previsao_demanda_v1.pkl"))
+features = joblib.load(os.path.join(BASE_DIR, "model/features_v1.pkl"))
+
 class InputData(BaseModel):
     ano: int
     mes: int
@@ -23,36 +20,29 @@ class InputData(BaseModel):
     especialidade: str
     unidade: str
 
-# ==========================
-# Endpoint de saúde
-# ==========================
-@app.get("/")
+@app.get("/health")
 def health():
     return {"status": "ok"}
 
-# ==========================
-# Endpoint de previsão
-# ==========================
 @app.post("/predict")
 def predict(data: InputData):
-
-    # Base numérica
-    row = {
+    # cria dataframe base
+    df = pd.DataFrame([{
         "ano": data.ano,
         "mes": data.mes,
         "dia": data.dia,
-        "dia_semana": data.dia_semana
-    }
+        "dia_semana": data.dia_semana,
+        f"especialidade_{data.especialidade}": 1,
+        f"unidade_{data.unidade}": 1
+    }])
 
-    # One-hot especialidade
-    for esp in ["Endocrinologia", "Oncologia", "Ortopedia", "Pediatria"]:
-        row[f"especialidade_{esp}"] = 1 if data.especialidade == esp else 0
+    # garante TODAS as colunas do treino
+    for col in features:
+        if col not in df.columns:
+            df[col] = 0
 
-    # One-hot unidade
-    for und in ["HGG", "HUGOL"]:
-        row[f"unidade_{und}"] = 1 if data.unidade == und else 0
-
-    df = pd.DataFrame([row])
+    # ordena exatamente igual ao treino
+    df = df[features]
 
     prediction = model.predict(df)[0]
 
